@@ -10,7 +10,10 @@
     <div class="container">
         <!-- ヘッダー -->
         <header class="header">
-            <h1>📝 メモタイム</h1>
+            <div class="header-top">
+                <h1>📝 メモタイム</h1>
+                <button id="themeToggleBtn" class="theme-toggle-btn" title="ダークモード切り替え">🌙</button>
+            </div>
             <p>あなたの思いを共有しよう</p>
         </header>
 
@@ -38,11 +41,33 @@
                 </div>
             </section>
 
+            <!-- 検索・フィルター セクション -->
+            <section class="search-section">
+                <div class="search-wrapper">
+                    <input 
+                        type="text" 
+                        id="searchInput" 
+                        placeholder="🔍 キーワードで検索..." 
+                        class="search-input"
+                    >
+                    <select id="filterSelect" class="filter-select">
+                        <option value="all">すべて表示</option>
+                        <option value="liked">いいね済み</option>
+                        <option value="notLiked">いいなし</option>
+                    </select>
+                </div>
+            </section>
+
             <!-- ツールバー -->
             <section class="toolbar">
                 <button id="sortBtn" class="sort-btn">⬇️ 新しい順</button>
                 <button id="clearAllBtn" class="clear-all-btn">🗑️ すべて削除</button>
             </section>
+
+            <!-- 検索結果情報 -->
+            <div class="search-info" id="searchInfo" style="display: none;">
+                <p>検索結果: <span id="searchCount">0</span> 件</p>
+            </div>
 
             <!-- タイムライン -->
             <section class="timeline" id="timeline">
@@ -57,6 +82,34 @@
         <footer class="footer">
             <p>&copy; 2026 SNS風メモアプリ | Made with ❤️</p>
         </footer>
+    </div>
+
+    <!-- 編集モーダル -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>メモを編集</h2>
+                <button class="modal-close-btn" onclick="closeEditModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input 
+                    type="text" 
+                    id="editUsername" 
+                    placeholder="お名前" 
+                    class="edit-input"
+                >
+                <textarea 
+                    id="editContent" 
+                    placeholder="メモの内容" 
+                    class="edit-textarea"
+                    rows="6"
+                ></textarea>
+            </div>
+            <div class="modal-footer">
+                <button id="saveEditBtn" class="modal-btn modal-save-btn">保存</button>
+                <button class="modal-btn modal-cancel-btn" onclick="closeEditModal()">キャンセル</button>
+            </div>
+        </div>
     </div>
 
     <script src="script.js"></script>
