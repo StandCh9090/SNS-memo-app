@@ -1,6 +1,9 @@
 // ===== データ管理 =====
 let memos = [];
 let sortOrder = 'desc'; // 'desc': 新しい順, 'asc': 古い順
+let currentSearchQuery = '';
+let currentFilter = 'all';
+let editingMemoId = null;
 
 // ===== DOM要素の取得 =====
 const usernameInput = document.getElementById('usernameInput');
@@ -9,10 +12,20 @@ const postBtn = document.getElementById('postBtn');
 const timeline = document.getElementById('timeline');
 const sortBtn = document.getElementById('sortBtn');
 const clearAllBtn = document.getElementById('clearAllBtn');
+const themeToggleBtn = document.getElementById('themeToggleBtn');
+const searchInput = document.getElementById('searchInput');
+const filterSelect = document.getElementById('filterSelect');
+const searchInfo = document.getElementById('searchInfo');
+const searchCount = document.getElementById('searchCount');
+const editModal = document.getElementById('editModal');
+const editUsername = document.getElementById('editUsername');
+const editContent = document.getElementById('editContent');
+const saveEditBtn = document.getElementById('saveEditBtn');
 
 // ===== 初期化 =====
 function init() {
     loadMemosFromStorage();
+    loadThemePreference();
     renderTimeline();
     attachEventListeners();
 }
@@ -27,6 +40,38 @@ function attachEventListeners() {
     });
     sortBtn.addEventListener('click', toggleSort);
     clearAllBtn.addEventListener('click', clearAllMemos);
+    themeToggleBtn.addEventListener('click', toggleTheme);
+    searchInput.addEventListener('input', handleSearch);
+    filterSelect.addEventListener('change', handleFilter);
+    saveEditBtn.addEventListener('click', saveEditedMemo);
+    
+    // モーダルの外側をクリックで閉じる
+    editModal.addEventListener('click', (e) => {
+        if (e.target === editModal) {
+            closeEditModal();
+        }
+    });
+}
+
+// ===== ダークモード ===== 
+function toggleTheme() {
+    const isDark = document.body.classList.toggle('dark-mode');
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    updateThemeIcon();
+    showAlert(isDark ? '🌙 ダークモードに切り替えました' : '☀️ ライトモードに切り替えました', 'info');
+}
+
+function loadThemePreference() {
+    const theme = localStorage.getItem('theme') || 'light';
+    if (theme === 'dark') {
+        document.body.classList.add('dark-mode');
+    }
+    updateThemeIcon();
+}
+
+function updateThemeIcon() {
+    const isDark = document.body.classList.contains('dark-mode');
+    themeToggleBtn.textContent = isDark ? '☀️' : '🌙';
 }
 
 // ===== メモ投稿 =====
@@ -74,23 +119,71 @@ function postMemo() {
     showAlert('✅ メモを投稿しました！', 'success');
 }
 
+// ===== 検索処理 =====
+function handleSearch(e) {
+    currentSearchQuery = e.target.value.toLowerCase();
+    renderTimeline();
+}
+
+// ===== フィルター処理 =====
+function handleFilter(e) {
+    currentFilter = e.target.value;
+    renderTimeline();
+}
+
+// ===== メモのフィルタリング =====
+function getFilteredMemos() {
+    return memos.filter(memo => {
+        // 検索条件
+        const matchesSearch = !currentSearchQuery || 
+            memo.content.toLowerCase().includes(currentSearchQuery) ||
+            memo.username.toLowerCase().includes(currentSearchQuery);
+
+        // フィルター条件
+        let matchesFilter = true;
+        if (currentFilter === 'liked') {
+            matchesFilter = memo.liked;
+        } else if (currentFilter === 'notLiked') {
+            matchesFilter = !memo.liked;
+        }
+
+        return matchesSearch && matchesFilter;
+    });
+}
+
 // ===== タイムライン表示 =====
 function renderTimeline() {
     timeline.innerHTML = '';
 
+    const filteredMemos = getFilteredMemos();
+
+    // 検索結果情報の表示
+    if (currentSearchQuery || currentFilter !== 'all') {
+        searchInfo.style.display = 'block';
+        searchCount.textContent = filteredMemos.length;
+    } else {
+        searchInfo.style.display = 'none';
+    }
+
     // メモが空の場合
-    if (memos.length === 0) {
+    if (filteredMemos.length === 0) {
+        let emptyMessage = '📭 メモがありません';
+        if (currentSearchQuery) {
+            emptyMessage = `🔍 「${currentSearchQuery}」に該当するメモが見つかりません`;
+        } else if (currentFilter !== 'all') {
+            emptyMessage = `📭 ${currentFilter === 'liked' ? 'いいね済み' : 'いいなし'}のメモがありません`;
+        }
+
         timeline.innerHTML = `
             <div class="empty-state">
-                <p>📭 まだメモがありません</p>
-                <p>最初のメモを投稿してみましょう！</p>
+                <p>${emptyMessage}</p>
             </div>
         `;
         return;
     }
 
     // ソート
-    const sortedMemos = [...memos].sort((a, b) => {
+    const sortedMemos = [...filteredMemos].sort((a, b) => {
         if (sortOrder === 'desc') {
             return b.id - a.id; // 新しい順
         } else {
@@ -124,6 +217,9 @@ function createMemoCard(memo) {
             <button class="like-btn ${likeClass}" onclick="toggleLike(${memo.id})">
                 ${likeText}
             </button>
+            <button class="edit-btn" onclick="openEditModal(${memo.id})">
+                ✏️ 編集
+            </button>
             <button class="delete-btn" onclick="deleteMemo(${memo.id})">
                 🗑️ 削除
             </button>
@@ -143,6 +239,54 @@ function toggleLike(memoId) {
 
     saveMemosToStorage();
     renderTimeline();
+}
+
+// ===== 編集機能 =====
+function openEditModal(memoId) {
+    const memo = memos.find(m => m.id === memoId);
+    if (!memo) return;
+
+    editingMemoId = memoId;
+    editUsername.value = memo.username;
+    editContent.value = memo.content;
+    editModal.classList.add('show');
+    editContent.focus();
+}
+
+function closeEditModal() {
+    editModal.classList.remove('show');
+    editingMemoId = null;
+    editUsername.value = '';
+    editContent.value = '';
+}
+
+function saveEditedMemo() {
+    const username = editUsername.value.trim();
+    const content = editContent.value.trim();
+
+    if (!username) {
+        showAlert('お名前を入力してください！');
+        editUsername.focus();
+        return;
+    }
+
+    if (!content) {
+        showAlert('メモを入力してください！');
+        editContent.focus();
+        return;
+    }
+
+    const memo = memos.find(m => m.id === editingMemoId);
+    if (!memo) return;
+
+    memo.username = username;
+    memo.content = content;
+    memo.timestamp = new Date().toLocaleString('ja-JP');
+
+    saveMemosToStorage();
+    renderTimeline();
+    closeEditModal();
+    showAlert('✅ メモを編集しました！', 'success');
 }
 
 // ===== メモ削除 =====
@@ -184,6 +328,7 @@ function saveMemosToStorage() {
         localStorage.setItem('memos', JSON.stringify(memos));
     } catch (e) {
         console.error('ストレージの保存に失敗しました:', e);
+        showAlert('⚠️ メモの保存に失敗しました', 'warning');
     }
 }
 
@@ -194,6 +339,7 @@ function loadMemosFromStorage() {
     } catch (e) {
         console.error('ストレージの読込に失敗しました:', e);
         memos = [];
+        showAlert('⚠️ メモの読込に失敗しました', 'warning');
     }
 }
 
@@ -213,8 +359,6 @@ function escapeHTML(text) {
 
 // アラート表示
 function showAlert(message, type = 'warning') {
-    // 簡単なアラート実装
-    // より洗練されたアラートUIが必要な場合は別途実装可能
     const alertDiv = document.createElement('div');
     alertDiv.style.cssText = `
         position: fixed;
